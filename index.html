@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Birthday Space Journey</title>
+    <style>
+        :root {
+            --neon-blue: #4cc9f0;
+            --neon-purple: #7209b7;
+            --bg-dark: #050510;
+        }
+
+        body {
+            margin: 0; background: var(--bg-dark); color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex; flex-direction: column; align-items: center;
+            overflow: hidden; touch-action: manipulation;
+        }
+
+        #ui-header { margin: 10px 0; text-align: center; }
+        #lvl-tag { color: var(--neon-blue); font-weight: bold; font-size: 1.2rem; }
+
+        #game-box {
+            position: relative; border: 4px solid var(--neon-purple);
+            background: #0a0a20; border-radius: 10px;
+            box-shadow: 0 0 20px rgba(114, 9, 183, 0.5);
+        }
+
+        canvas { display: block; }
+
+        /* التحكم للموبايل */
+        .pad {
+            display: grid; grid-template-columns: repeat(3, 70px);
+            grid-template-rows: repeat(2, 70px); gap: 10px; margin-top: 20px;
+        }
+        .key {
+            width: 70px; height: 70px; background: rgba(76, 201, 240, 0.1);
+            border: 2px solid var(--neon-blue); border-radius: 15px;
+            color: white; font-size: 25px; display: flex;
+            justify-content: center; align-items: center; cursor: pointer;
+        }
+        .key:active { background: var(--neon-blue); transform: scale(0.9); }
+        .up { grid-column: 2; } .left { grid-column: 1; } .down { grid-column: 2; } .right { grid-column: 3; }
+
+        /* --- شاشة المفاجأة العملاقة --- */
+        #popup {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: #000; display: none;
+            flex-direction: column; justify-content: center;
+            align-items: center; z-index: 1000; text-align: center;
+        }
+
+        .content-wrap {
+            position: relative; width: 100%; height: 100%;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center; padding: 10px; box-sizing: border-box;
+        }
+
+        #p-title {
+            color: var(--neon-blue); font-size: 1.6rem; margin: 10px 0 5px;
+            text-shadow: 0 0 10px var(--neon-blue); z-index: 1002;
+        }
+
+        #p-text { font-size: 1rem; margin: 0 0 10px; z-index: 1002; color: #eee; }
+
+        .photo-frame {
+            width: 98vw; /* العرض يملأ الشاشة تقريباً */
+            max-width: 600px;
+            height: auto;
+            max-height: 65vh; /* الحفاظ على مساحة للنصوص والأزرار */
+            border-radius: 10px;
+            border: 3px solid var(--neon-blue);
+            object-fit: contain; /* عشان الصورة تظهر كاملة بدون قص */
+            box-shadow: 0 0 30px rgba(76, 201, 240, 0.4);
+            z-index: 1002;
+            background: #000;
+        }
+
+        #next-btn {
+            margin-top: 20px; padding: 12px 40px; font-size: 1.2rem;
+            background: var(--neon-blue); border: none; border-radius: 40px;
+            color: #000; font-weight: bold; z-index: 1002;
+            box-shadow: 0 0 15px var(--neon-blue);
+        }
+
+        #fw-canvas { position: absolute; top:0; left:0; pointer-events: none; z-index: 1003; }
+    </style>
+</head>
+<body>
+
+    <div id="ui-header">
+        <div id="lvl-tag">المرحلة: <span id="lvl-num">1</span></div>
+    </div>
+
+    <div id="game-box">
+        <canvas id="mazeCanvas"></canvas>
+    </div>
+
+    <div class="pad">
+        <div class="key up" onclick="move('up')">▲</div>
+        <div class="key left" onclick="move('left')">◀</div>
+        <div class="key down" onclick="move('down')">▼</div>
+        <div class="key right" onclick="move('right')">▶</div>
+    </div>
+
+    <div id="popup">
+        <canvas id="fw-canvas"></canvas>
+        <div class="content-wrap">
+            <h1 id="p-title">Title</h1>
+            <p id="p-text">Text</p>
+            <img id="p-img" src="" class="photo-frame">
+            <button id="next-btn" onclick="nextLevel()">كمل الرحلة 🚀</button>
+        </div>
+    </div>
+
+<script>
+    const canvas = document.getElementById('mazeCanvas');
+    const ctx = canvas.getContext('2d');
+    let currentLvl = 0;
+    let player = { x: 0, y: 0 };
+
+    // --- بيانات المراحل ---
+    const levels = [
+        {
+            title: "بداية الحكاية ✨",
+            text: "الحونشايه كبرت سنة!",
+            image: "13A7A3DA-80F1-4FE9-934B-2F14C0274754.jpg", 
+            maze: [[0,0,1,0,0],[1,0,0,0,1],[0,0,1,0,0],[0,1,1,1,0],[0,0,0,0,0]],
+            goal: {x: 4, y: 4}
+        },
+        {
+            title: "كبرنا سنة كمان 🚀",
+            text: "افتكري ان الوقت الصعب الي بيعدي بيعلمنا حجات كتير",
+            image: "B7562048-DB87-4FFE-8D10-54F20FD3E145.jpg", 
+            maze: [[0,0,0,0,0,1,0,0],[0,1,1,1,0,1,0,1],[0,1,0,0,0,0,0,0],[0,1,0,1,1,1,1,0],[0,0,0,1,0,0,0,0],[1,1,0,1,0,1,1,0],[0,0,0,0,0,0,1,0],[0,1,1,1,1,0,0,0]],
+            goal: {x: 7, y: 7}
+        },
+        {
+            title: "Happy Birthday! 🎂",
+            text: "My young girl get 21y ✨",
+            image: "https://via.placeholder.com/600x600?text=Birthday+Photo",
+            maze: [[0,0,0,1,0,0,0,0,0,0],[1,1,0,1,0,1,1,1,0,0],[0,0,0,0,0,0,1,0,0,0],[0,1,1,1,1,0,1,0,1,0],[0,0,0,0,1,0,0,0,1,0],[1,1,1,0,1,1,1,1,1,0],[0,0,0,0,0,0,0,0,0,0],[0,1,1,1,1,1,1,1,1,0],[0,0,0,0,0,0,0,0,1,0],[1,1,1,1,1,1,1,0,0,0]],
+            goal: {x: 9, y: 9}
+        }
+    ];
+
+    function initLevel() {
+        const lvl = levels[currentLvl];
+        const count = lvl.maze.length;
+        const screenWidth = Math.min(window.innerWidth - 30, 400);
+        const cellSize = screenWidth / count;
+        canvas.width = screenWidth; canvas.height = screenWidth;
+        player = { x: 0, y: 0 };
+        document.getElementById('lvl-num').innerText = currentLvl + 1;
+        draw(cellSize);
+    }
+
+    function draw(cellSize) {
+        const lvl = levels[currentLvl];
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        for(let r=0; r<lvl.maze.length; r++) {
+            for(let c=0; c<lvl.maze[r].length; c++) {
+                if(lvl.maze[r][c] === 1) {
+                    ctx.fillStyle = "#1e1e40";
+                    ctx.fillRect(c*cellSize + 2, r*cellSize + 2, cellSize - 4, cellSize - 4);
+                }
+            }
+        }
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.font = `${cellSize * 0.7}px Arial`;
+        ctx.fillText("🎁", lvl.goal.x * cellSize + cellSize/2, lvl.goal.y * cellSize + cellSize/2);
+        ctx.fillText("👨‍🚀", player.x * cellSize + cellSize/2, player.y * cellSize + cellSize/2);
+    }
+
+    function move(dir) {
+        const lvl = levels[currentLvl];
+        let nX = player.x, nY = player.y;
+        if(dir === 'up') nY--; if(dir === 'down') nY++; if(dir === 'left') nX--; if(dir === 'right') nX++;
+        if(nY >= 0 && nY < lvl.maze.length && nX >= 0 && nX < lvl.maze[0].length) {
+            if(lvl.maze[nY][nX] === 0) {
+                player.x = nX; player.y = nY;
+                draw(canvas.width / lvl.maze.length);
+                if(player.x === lvl.goal.x && player.y === lvl.goal.y) win();
+            }
+        }
+    }
+
+    function win() {
+        const lvl = levels[currentLvl];
+        document.getElementById('p-title').innerText = lvl.title;
+        document.getElementById('p-text').innerText = lvl.text;
+        document.getElementById('p-img').src = lvl.image;
+        document.getElementById('popup').style.display = 'flex';
+        if(currentLvl === 2) {
+            document.getElementById('next-btn').innerText = "عيد ميلاد سعيد! 🎈";
+            startFireworks();
+        }
+    }
+
+    function nextLevel() {
+        if(currentLvl < 2) {
+            currentLvl++; document.getElementById('popup').style.display = 'none'; initLevel();
+        } else { location.reload(); }
+    }
+
+    function startFireworks() {
+        const fCanvas = document.getElementById('fw-canvas');
+        const fCtx = fCanvas.getContext('2d');
+        fCanvas.width = window.innerWidth; fCanvas.height = window.innerHeight;
+        let particles = [];
+        function anim() {
+            fCtx.clearRect(0, 0, fCanvas.width, fCanvas.height);
+            if(Math.random() < 0.25) particles.push({
+                x: Math.random()*fCanvas.width, y: fCanvas.height,
+                vx: Math.random()*4-2, vy: Math.random()*-15-5,
+                c: `hsl(${Math.random()*360},100%,60%)`, l: 80
+            });
+            particles.forEach((pt,i) => {
+                pt.x += pt.vx; pt.y += pt.vy; pt.vy += 0.25; pt.l--;
+                fCtx.fillStyle = pt.c; fCtx.beginPath(); fCtx.arc(pt.x, pt.y, 4, 0, 7); fCtx.fill();
+                if(pt.l <= 0) particles.splice(i,1);
+            });
+            requestAnimationFrame(anim);
+        }
+        anim();
+    }
+
+    initLevel();
+</script>
+</body>
+</html>
